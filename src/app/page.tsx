@@ -1,14 +1,18 @@
-"use client";
+"use client"; // Required to use state/hooks in a Next.js app router page
 import { useState } from "react";
 
 export default function Home() {
-  const [inputValue, setInputValue] = useState("");
-  const [audioFilePath, setAudioFilePath] = useState("");
-  const [summaryText, setSummaryText] = useState("");
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
-  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [inputValue, setInputValue] = useState(""); // State for input text (extracted from PDF or typed manually)
+  const [audioFilePath, setAudioFilePath] = useState(""); // Path to generated audio file
+  const [summaryText, setSummaryText] = useState(""); // Summary returned by Gemini
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false); // Loading state
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false); // Loading state
+  const [pdfFile, setPdfFile] = useState<File | null>(null); // PDF file object
 
+  /*
+   * Handle PDF file upload, read it as binary, 
+   * and extract text content using pdfjs-dist.
+   */
   const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setPdfFile(e.target.files[0]);
@@ -17,20 +21,24 @@ export default function Home() {
       reader.onload = async function () {
         const pdfjsLib = await import("pdfjs-dist");
         pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
-        const typedarray = new Uint8Array(this.result as ArrayBuffer);
-        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+        const typedarray = new Uint8Array(this.result as ArrayBuffer); // Convert file into typed array for PDF.js
+        const pdf = await pdfjsLib.getDocument(typedarray).promise; // Load PDF document
         let text = "";
-        for (let i = 1; i <= pdf.numPages; i++) {
+        for (let i = 1; i <= pdf.numPages; i++) { // Loop through all pages to extract text
           const page = await pdf.getPage(i);
           const content = await page.getTextContent();
-          text += content.items.map((item: any) => item.str).join(" ") + "\n";
+          text += content.items.map((item: any) => item.str).join(" ") + "\n"; // Concatenate all text items
         }
-        setInputValue(text);
+        setInputValue(text); // Update text area with extracted text
       };
       reader.readAsArrayBuffer(file);
     }
   };
 
+  /*
+   * Handle form submission: 
+   * Calls TTS API to generate MP3 and Summary API to create summary.
+   */
   const handleSubmit = async () => {
     let extractedText = inputValue;
 
@@ -46,9 +54,10 @@ export default function Home() {
       body: JSON.stringify({ text: extractedText }),
     });
 
+    // If TTS succeeded, store file path
     if (audioResponse.ok) {
       const audioData = await audioResponse.json();
-      setAudioFilePath(audioData.filePath);
+      setAudioFilePath(audioData.filePath); // Set audio path for download
     } else {
       console.error("Failed to synthesize speech:", audioResponse.statusText);
     }
@@ -64,9 +73,10 @@ export default function Home() {
       body: JSON.stringify({ text: extractedText }),
     });
 
+    // If summary succeeded, store summary text
     if (summaryResponse.ok) {
       const summaryData = await summaryResponse.json();
-      setSummaryText(summaryData.summary);
+      setSummaryText(summaryData.summary); // Show summary result
     } else {
       console.error("Failed to generate summary:", summaryResponse.statusText);
     }
@@ -74,11 +84,14 @@ export default function Home() {
     setIsLoadingSummary(false);
   };
 
+  /*
+   *Triggers audio download from public/output.mp3
+   */
   const handleDownload = () => {
     if (audioFilePath) {
       const link = document.createElement("a");
       link.href = audioFilePath;
-      link.download = "output.mp3";
+      link.download = "output.mp3"; // Save as output.mp3
       link.click();
     }
   };
